@@ -193,15 +193,6 @@ public:
         }
         std::cout << std::endl;
 
-        std::cout << "Manual Integer MVM on array " << arrayID << ":" << std::endl;
-        for (auto row = 0; row < arrayOutSize; row++) {
-            for (auto col = 0; col < arrayInSize; col++) {
-                outVec_ints[row] += matrix_ints[row * arrayInSize + col] * inVec_ints[col];
-            }
-            std::cout << outVec_ints[row] << " ";
-        }
-        std::cout << std::endl;
-
         quantize(arrayID, arrayOutSize, arrayInSize, inputOperandSize);
     }
     
@@ -213,15 +204,13 @@ public:
     void quantize(uint32_t arrayID, uint32_t num_rows, uint32_t num_cols, uint32_t op_size) {
         auto& outVec = (*outVecs)[arrayID];
         auto& outVec_int = (*outVecs_int)[arrayID];
-        
-        float vector_scale_factor = 0.0f;
-        for (size_t i = 0; i < num_cols; i++) {
-            if (fabs(outVec[i]) > vector_scale_factor) vector_scale_factor = fabs(outVec[i]);
-        }
 
-        uint32_t max_type_value = pow(2, op_size * 8);
+        uint64_t max_type_value = pow(2, op_size * 8);
+        float floatMin = 0.0f;
+        float floatMax = 1.0f;
+        float floatRange = floatMax - floatMin;
         for (uint32_t i = 0; i < num_cols; i++) {
-            outVec_int[i] = std::lround(outVec[i] / vector_scale_factor * max_type_value);
+            outVec_int[i] = (outVec[i] / (floatRange + floatMin)) * max_type_value;
         }
     }
 
@@ -231,17 +220,18 @@ public:
         auto& matrix = (*matrices)[arrayID];
         auto& matrix_int = (*matrices_int)[arrayID];
 
-        float vector_scale_factor = (*vector_scale_factors)[arrayID];
-        float matrix_scale_factor = (*matrix_scale_factors)[arrayID];
-
-        uint32_t max_type_value = pow(2, op_size * 8);
+        uint64_t max_type_value = pow(2, op_size * 8);
+        float floatMin = 0.0f;
+        float floatMax = 1.0f;
+        float floatRange = floatMax - floatMin;
         for (uint32_t i = 0; i < num_cols; i++) {
-            inVec[i] = inVec_int[i] * vector_scale_factor * max_type_value;
+            inVec[i] = (inVec_int[i] / static_cast<float>(max_type_value)) * (floatRange + floatMin);
+            std::cout << "uint to float: " << inVec[i] << std::endl;
         }
 
         for (uint32_t i = 0; i < num_rows; i++) { // for each row in matrix
             for (uint32_t j = 0; j < num_cols; j++) { // for each entry in a matrix row
-                matrix[i * num_cols + j] = matrix_int[i * num_cols + j] * matrix_scale_factor * max_type_value;
+                matrix[i * num_cols + j] = (matrix_int[i * num_cols + j] / static_cast<float>(max_type_value)) * floatRange + floatMin;
             }
         }
     }
